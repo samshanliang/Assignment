@@ -1,0 +1,68 @@
+---
+title: "ML Assignment"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## Human Activity Recognition 
+Then loading the relevant packages required. 
+For me, this includes tidyverse, caret and randomForest. I have decided that I will be using randomforest early on due to the relatively lack of computational power it requires. I will go further into the details of selection later on. 
+```{r, echo = TRUE, results = 'hide'} 
+library(caret)
+library(tidyverse)
+library(randomForest)
+```
+
+This assignment begins with loading both training and testing sets of the data. 
+```{r, echo = TRUE, results = 'hide'}
+pml_training <- read_csv("/Users/steve/Downloads/pml-training.csv")
+pml_testing <- read_csv("/Users/steve/Downloads/pml-testing.csv")
+```
+
+Next up is the selection of variables to be used as part of the training the model. 
+The following are the principles I used in selection of variable. 
+- The variable must not have more than 50% of the data missing. i.e they cannot have NA as their majority input. This is because the missing values would need to be imputed, and if a large number is imputed then the data may potentiall be skewed. 
+- The variable must not be overly specific, otherwise this will overfit the training set but do poorly on the test set. However, I did include the username, as I can see that the users in training and testing sets are the same, doing this allows the model to adjust for individual differences that could potentially change the prediction. 
+- The variable must contribute to the predicted variable in a likely fashion. i.e, must not be noise. These include the window and the timestamp variables, which does not seem to have a known direct correlation with the type of movement the users make, and may instead create additional noise and reduce the accuracy of the variable. 
+```{r, echo = TRUE, result = 'hide'}
+pml_training1 <- pml_training %>% select(user_name, roll_belt, pitch_belt, yaw_belt, total_accel_belt, gyros_belt_x, gyros_belt_y, gyros_belt_z, accel_belt_x, accel_belt_y, accel_belt_z, magnet_belt_x, magnet_belt_y, magnet_belt_z, roll_arm, pitch_arm, yaw_arm, total_accel_arm, gyros_arm_x, gyros_arm_y, gyros_arm_z, accel_arm_x, accel_arm_y, accel_arm_z, magnet_arm_x, magnet_arm_y, magnet_arm_z, roll_dumbbell, pitch_dumbbell, yaw_dumbbell, total_accel_dumbbell, gyros_dumbbell_x, gyros_dumbbell_y, gyros_dumbbell_z, accel_dumbbell_x, accel_belt_y, accel_belt_z, magnet_dumbbell_x, magnet_dumbbell_y, magnet_dumbbell_z, roll_forearm, pitch_forearm, yaw_forearm, gyros_forearm_x, gyros_forearm_y, gyros_forearm_z, accel_forearm_x, accel_forearm_y, accel_forearm_z, magnet_forearm_x, magnet_forearm_y, magnet_forearm_z, classe)
+```
+
+This resulted in me selecting only the variables associated with movement and has minimal missing data. The code is dataframe is re-saved, selecting only the variables to ease later codes. The "classe" variable which is the target variable we are trying to predict is converted to a factor class to ensure that the later model will be a categorical prediction.
+```{r, echo = TRUE, result = 'hide'}
+pml_training1$classe <- as.factor(pml_training1$classe)
+```
+
+I have not gone through the entirety of the dataset, however just incase that there is some missing data I would like to impute them. As part of the process I would also like to standardise the data to reduce the large effect of outliers from the dataset. 
+```{r, echo = TRUE}
+train_process <- pml_training1[,-51]
+preprocess_train <- preProcess(pml_training1[,-51], method = c("knnImpute", "center", "scale"))
+pml_train_f <- predict(preprocess_train, pml_training1)
+```
+
+The next step is to set up the training parameters via the trainControl function. 
+In this assignment I will use the cross validation only as this is less computational demanding but produces relative good results. 
+```{r, echo = TRUE}
+train1 <- trainControl(method = "cv", verboseIter = TRUE)
+```
+
+Ideally, I would have preferred to use the leave out out cross validation would produce the most amount of data for training to occur. However, it is also very computational demanding, and my current laptop may not have sufficient computation power for. 
+```{r, echo = TRUE} 
+train2 <- trainControl(method = "LOOCV")
+```
+
+Once the training parameters are completed and the data is well set up for the training, we would decide on the training method used. For a simple, yet accurate algorithm, I have chose random forest. If there was sufficient computational power, I would have loved to attempt gradient boosting, especially given the large number of variables used within the model. 
+I will save this model as "model1".
+```{r, echo = TRUE}
+model1 <- train(classe ~ ., data = pml_train_f, method = "rf", trControl = train1)
+```
+
+The model can then be used to predict the classe of the testing data. 
+I will then print out these predictions.
+```{r, echo = TRUE}
+predict1 <- predict(model1, pml_testing)
+predict1
+```
