@@ -7,7 +7,7 @@ output: html_document
 knitr::opts_chunk$set(echo = TRUE)
 ```
 
-## Human Activity Recognition 
+# Human Activity Recognition 
 Then loading the relevant packages required. 
 For me, this includes tidyverse, caret and randomForest. I have decided that I will be using randomforest early on due to the relatively lack of computational power it requires. I will go further into the details of selection later on. 
 ```{r, echo = TRUE, results = 'hide'} 
@@ -36,28 +36,31 @@ This resulted in me selecting only the variables associated with movement and ha
 pml_training1$classe <- as.factor(pml_training1$classe)
 ```
 
-I have not gone through the entirety of the dataset, however just incase that there is some missing data I would like to impute them. As part of the process I would also like to standardise the data to reduce the large effect of outliers from the dataset. 
+I have not gone through the entirety of the dataset, however just incase that there is some missing data I would like to impute them using K nearest neighbour. As part of the process I would also like to standardise the data to reduce the large effect of outliers from the dataset. The train data is split into the training and validation sets by 80:20 rule to estimte my out of sample error.
 ```{r, echo = TRUE}
 train_process <- pml_training1[,-51]
-preprocess_train <- preProcess(pml_training1[,-51], method = c("knnImpute", "center", "scale"))
-pml_train_f <- predict(preprocess_train, pml_training1)
+preprocess_train <- preProcess(train_process, method = "knnImpute")
+pml_train_f <- predict(preprocess_train, train_process)
+pml_train_f1 <- pml_train_f %>% cbind(pml_training1[,51])
+partition <- createDataPartition(pml_train_f1$classe, p=0.8, list=FALSE)
+train <- pml_train_f1[partition,]
+valid <- pml_train_f1[-partition,]
+pml_train_f <- predict(preprocess_train, train)
 ```
 
 The next step is to set up the training parameters via the trainControl function. 
 In this assignment I will use the cross validation only as this is less computational demanding but produces relative good results. 
+Cross validation is a resampling procedure used to evaluate machine learning models on a limited data sample. The data is split into 'k' number of groups, and each group is treated as test data, while the remaining groups are treated like a training data set. For the purpose of this exercise k=10
 ```{r, echo = TRUE}
-train1 <- trainControl(method = "cv", verboseIter = TRUE)
+train1 <- trainControl(method = "cv", number = 10)
 ```
 
 Ideally, I would have preferred to use the leave out out cross validation would produce the most amount of data for training to occur. However, it is also very computational demanding, and my current laptop may not have sufficient computation power for. 
-```{r, echo = TRUE} 
-train2 <- trainControl(method = "LOOCV")
-```
 
-Once the training parameters are completed and the data is well set up for the training, we would decide on the training method used. For a simple, yet accurate algorithm, I have chose random forest. If there was sufficient computational power, I would have loved to attempt gradient boosting, especially given the large number of variables used within the model. 
+Once the training parameters are completed and the data is well set up for the training, we would decide on the training method used. Decision tree learning is a method commonly used in data mining and machine learning. The goal is to create a model that predicts the value of a target variable based on several input variables. Hence, for a simple, yet accurate algorithm, I have chose randomforest, a sub class of decision tree that aggregrates the results from many trees. If there was sufficient computational power, I would have loved to attempt gradient boosting, especially given the large number of variables used within the model. 
 I will save this model as "model1".
 ```{r, echo = TRUE}
-model1 <- train(classe ~ ., data = pml_train_f, method = "rf", trControl = train1)
+model1 <- train(classe ~ ., data = train, method = "rf", trControl = train1)
 ```
 
 The model can then be used to predict the classe of the testing data. 
@@ -66,3 +69,10 @@ I will then print out these predictions.
 predict1 <- predict(model1, pml_testing)
 predict1
 ```
+
+As part of predicting the out of sample error, I will do so on the validation set. 
+```{r, echo = TRUE}
+predicted_valid <- predict(model1, valid)
+confusionMatrix(predicted_valid, valid$classe)
+```
+And that gives my accuracy and the estimated out of sample error can be calculated by 1 - accuracy. 

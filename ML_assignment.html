@@ -122,8 +122,8 @@ $(document).ready(function () {
 </div>
 
 
-<div id="human-activity-recognition" class="section level2">
-<h2>Human Activity Recognition</h2>
+<div id="human-activity-recognition" class="section level1">
+<h1>Human Activity Recognition</h1>
 <p>Then loading the relevant packages required. For me, this includes tidyverse, caret and randomForest. I have decided that I will be using randomforest early on due to the relatively lack of computational power it requires. I will go further into the details of selection later on.</p>
 <pre class="r"><code>library(caret)</code></pre>
 <pre><code>## Warning: package 'caret' was built under R version 3.4.4</code></pre>
@@ -131,12 +131,12 @@ $(document).ready(function () {
 <pre><code>## Loading required package: ggplot2</code></pre>
 <pre><code>## Warning: package 'ggplot2' was built under R version 3.4.4</code></pre>
 <pre class="r"><code>library(tidyverse)</code></pre>
-<pre><code>## ── Attaching packages ───────────────────────────────────────────────────── tidyverse 1.2.1 ──</code></pre>
+<pre><code>## ── Attaching packages ────────────────────────────────────────────────────────────────────── tidyverse 1.2.1 ──</code></pre>
 <pre><code>## ✔ tibble  1.4.2     ✔ purrr   0.2.4
 ## ✔ tidyr   0.8.0     ✔ dplyr   0.7.4
 ## ✔ readr   1.1.1     ✔ stringr 1.3.0
 ## ✔ tibble  1.4.2     ✔ forcats 0.3.0</code></pre>
-<pre><code>## ── Conflicts ──────────────────────────────────────────────────────── tidyverse_conflicts() ──
+<pre><code>## ── Conflicts ───────────────────────────────────────────────────────────────────────── tidyverse_conflicts() ──
 ## ✖ dplyr::filter() masks stats::filter()
 ## ✖ dplyr::lag()    masks stats::lag()
 ## ✖ purrr::lift()   masks caret::lift()</code></pre>
@@ -219,84 +219,60 @@ $(document).ready(function () {
 <pre class="r"><code>pml_training1 &lt;- pml_training %&gt;% select(user_name, roll_belt, pitch_belt, yaw_belt, total_accel_belt, gyros_belt_x, gyros_belt_y, gyros_belt_z, accel_belt_x, accel_belt_y, accel_belt_z, magnet_belt_x, magnet_belt_y, magnet_belt_z, roll_arm, pitch_arm, yaw_arm, total_accel_arm, gyros_arm_x, gyros_arm_y, gyros_arm_z, accel_arm_x, accel_arm_y, accel_arm_z, magnet_arm_x, magnet_arm_y, magnet_arm_z, roll_dumbbell, pitch_dumbbell, yaw_dumbbell, total_accel_dumbbell, gyros_dumbbell_x, gyros_dumbbell_y, gyros_dumbbell_z, accel_dumbbell_x, accel_belt_y, accel_belt_z, magnet_dumbbell_x, magnet_dumbbell_y, magnet_dumbbell_z, roll_forearm, pitch_forearm, yaw_forearm, gyros_forearm_x, gyros_forearm_y, gyros_forearm_z, accel_forearm_x, accel_forearm_y, accel_forearm_z, magnet_forearm_x, magnet_forearm_y, magnet_forearm_z, classe)</code></pre>
 <p>This resulted in me selecting only the variables associated with movement and has minimal missing data. The code is dataframe is re-saved, selecting only the variables to ease later codes. The “classe” variable which is the target variable we are trying to predict is converted to a factor class to ensure that the later model will be a categorical prediction.</p>
 <pre class="r"><code>pml_training1$classe &lt;- as.factor(pml_training1$classe)</code></pre>
-<p>I have not gone through the entirety of the dataset, however just incase that there is some missing data I would like to impute them. As part of the process I would also like to standardise the data to reduce the large effect of outliers from the dataset.</p>
+<p>I have not gone through the entirety of the dataset, however just incase that there is some missing data I would like to impute them using K nearest neighbour. As part of the process I would also like to standardise the data to reduce the large effect of outliers from the dataset. The train data is split into the training and validation sets by 80:20 rule to estimte my out of sample error.</p>
 <pre class="r"><code>train_process &lt;- pml_training1[,-51]
-preprocess_train &lt;- preProcess(pml_training1[,-51], method = c(&quot;knnImpute&quot;, &quot;center&quot;, &quot;scale&quot;))
-pml_train_f &lt;- predict(preprocess_train, pml_training1)</code></pre>
-<p>The next step is to set up the training parameters via the trainControl function. In this assignment I will use the cross validation only as this is less computational demanding but produces relative good results.</p>
-<pre class="r"><code>train1 &lt;- trainControl(method = &quot;cv&quot;, verboseIter = TRUE)</code></pre>
+preprocess_train &lt;- preProcess(train_process, method = &quot;knnImpute&quot;)
+pml_train_f &lt;- predict(preprocess_train, train_process)
+pml_train_f1 &lt;- pml_train_f %&gt;% cbind(pml_training1[,51])
+partition &lt;- createDataPartition(pml_train_f1$classe, p=0.8, list=FALSE)
+train &lt;- pml_train_f1[partition,]
+valid &lt;- pml_train_f1[-partition,]
+pml_train_f &lt;- predict(preprocess_train, train)</code></pre>
+<p>The next step is to set up the training parameters via the trainControl function. In this assignment I will use the cross validation only as this is less computational demanding but produces relative good results. Cross validation is a resampling procedure used to evaluate machine learning models on a limited data sample. The data is split into ‘k’ number of groups, and each group is treated as test data, while the remaining groups are treated like a training data set. For the purpose of this exercise k=10</p>
+<pre class="r"><code>train1 &lt;- trainControl(method = &quot;cv&quot;, number = 10)</code></pre>
 <p>Ideally, I would have preferred to use the leave out out cross validation would produce the most amount of data for training to occur. However, it is also very computational demanding, and my current laptop may not have sufficient computation power for.</p>
-<pre class="r"><code>train2 &lt;- trainControl(method = &quot;LOOCV&quot;)</code></pre>
-<p>Once the training parameters are completed and the data is well set up for the training, we would decide on the training method used. For a simple, yet accurate algorithm, I have chose random forest. If there was sufficient computational power, I would have loved to attempt gradient boosting, especially given the large number of variables used within the model. I will save this model as “model1”.</p>
-<pre class="r"><code>model1 &lt;- train(classe ~ ., data = pml_train_f, method = &quot;rf&quot;, trControl = train1)</code></pre>
-<pre><code>## + Fold01: mtry= 2 
-## - Fold01: mtry= 2 
-## + Fold01: mtry=28 
-## - Fold01: mtry=28 
-## + Fold01: mtry=54 
-## - Fold01: mtry=54 
-## + Fold02: mtry= 2 
-## - Fold02: mtry= 2 
-## + Fold02: mtry=28 
-## - Fold02: mtry=28 
-## + Fold02: mtry=54 
-## - Fold02: mtry=54 
-## + Fold03: mtry= 2 
-## - Fold03: mtry= 2 
-## + Fold03: mtry=28 
-## - Fold03: mtry=28 
-## + Fold03: mtry=54 
-## - Fold03: mtry=54 
-## + Fold04: mtry= 2 
-## - Fold04: mtry= 2 
-## + Fold04: mtry=28 
-## - Fold04: mtry=28 
-## + Fold04: mtry=54 
-## - Fold04: mtry=54 
-## + Fold05: mtry= 2 
-## - Fold05: mtry= 2 
-## + Fold05: mtry=28 
-## - Fold05: mtry=28 
-## + Fold05: mtry=54 
-## - Fold05: mtry=54 
-## + Fold06: mtry= 2 
-## - Fold06: mtry= 2 
-## + Fold06: mtry=28 
-## - Fold06: mtry=28 
-## + Fold06: mtry=54 
-## - Fold06: mtry=54 
-## + Fold07: mtry= 2 
-## - Fold07: mtry= 2 
-## + Fold07: mtry=28 
-## - Fold07: mtry=28 
-## + Fold07: mtry=54 
-## - Fold07: mtry=54 
-## + Fold08: mtry= 2 
-## - Fold08: mtry= 2 
-## + Fold08: mtry=28 
-## - Fold08: mtry=28 
-## + Fold08: mtry=54 
-## - Fold08: mtry=54 
-## + Fold09: mtry= 2 
-## - Fold09: mtry= 2 
-## + Fold09: mtry=28 
-## - Fold09: mtry=28 
-## + Fold09: mtry=54 
-## - Fold09: mtry=54 
-## + Fold10: mtry= 2 
-## - Fold10: mtry= 2 
-## + Fold10: mtry=28 
-## - Fold10: mtry=28 
-## + Fold10: mtry=54 
-## - Fold10: mtry=54 
-## Aggregating results
-## Selecting tuning parameters
-## Fitting mtry = 2 on full training set</code></pre>
+<p>Once the training parameters are completed and the data is well set up for the training, we would decide on the training method used. Decision tree learning is a method commonly used in data mining and machine learning. The goal is to create a model that predicts the value of a target variable based on several input variables. Hence, for a simple, yet accurate algorithm, I have chose randomforest, a sub class of decision tree that aggregrates the results from many trees. If there was sufficient computational power, I would have loved to attempt gradient boosting, especially given the large number of variables used within the model. I will save this model as “model1”.</p>
+<pre class="r"><code>model1 &lt;- train(classe ~ ., data = train, method = &quot;rf&quot;, trControl = train1)</code></pre>
 <p>The model can then be used to predict the classe of the testing data. I will then print out these predictions.</p>
 <pre class="r"><code>predict1 &lt;- predict(model1, pml_testing)
 predict1</code></pre>
-<pre><code>##  [1] E A E E E E E E A E E E E A E E E E E E
+<pre><code>##  [1] E A B A A E E A A E B B B A E E E A E E
 ## Levels: A B C D E</code></pre>
+<p>As part of predicting the out of sample error, I will do so on the validation set.</p>
+<pre class="r"><code>predicted_valid &lt;- predict(model1, valid)
+confusionMatrix(predicted_valid, valid$classe)</code></pre>
+<pre><code>## Confusion Matrix and Statistics
+## 
+##           Reference
+## Prediction    A    B    C    D    E
+##          A 1114    3    0    0    0
+##          B    2  754    6    0    0
+##          C    0    2  676    7    1
+##          D    0    0    2  636    2
+##          E    0    0    0    0  718
+## 
+## Overall Statistics
+##                                           
+##                Accuracy : 0.9936          
+##                  95% CI : (0.9906, 0.9959)
+##     No Information Rate : 0.2845          
+##     P-Value [Acc &gt; NIR] : &lt; 2.2e-16       
+##                                           
+##                   Kappa : 0.9919          
+##  Mcnemar's Test P-Value : NA              
+## 
+## Statistics by Class:
+## 
+##                      Class: A Class: B Class: C Class: D Class: E
+## Sensitivity            0.9982   0.9934   0.9883   0.9891   0.9958
+## Specificity            0.9989   0.9975   0.9969   0.9988   1.0000
+## Pos Pred Value         0.9973   0.9895   0.9854   0.9938   1.0000
+## Neg Pred Value         0.9993   0.9984   0.9975   0.9979   0.9991
+## Prevalence             0.2845   0.1935   0.1744   0.1639   0.1838
+## Detection Rate         0.2840   0.1922   0.1723   0.1621   0.1830
+## Detection Prevalence   0.2847   0.1942   0.1749   0.1631   0.1830
+## Balanced Accuracy      0.9986   0.9954   0.9926   0.9939   0.9979</code></pre>
+<p>And that gives my accuracy and the estimated out of sample error can be calculated by 1 - accuracy.</p>
 </div>
 
 
